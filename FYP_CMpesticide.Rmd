@@ -1,0 +1,1202 @@
+---
+title: "FYP - agri"
+author: "Roy"
+date: "2/11/2023"
+output:
+  html_document:
+    code_folding: show
+    toc: yes
+    toc_float: yes
+    theme: flatly
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(message = FALSE, warning = FALSE) 
+```
+
+# Set Library
+```{r Set up}
+library(readxl) # read excel sheets
+
+library(dplyr) # data wrangling
+library(tidyverse) # data wrangling
+library(tidyr) # data wrangling
+library(stringr) # replacing strings in db
+library(data.table) # transform to data table
+
+library(ggplot2) # visualization
+library(ggfortify) # manipulating plots
+library(ggforce) # ellipses
+library(gridExtra) # manipulating plots
+library(forcats) # specifying factors
+library(ggrepel)
+library(ggpubr)
+library(extrafont) # fonts library
+library(viridis) # Plot Aes
+library(hrbrthemes) # Plot Aes
+library(ggthemes) # Plot Aes
+library(pheatmap) # Plot heatmaps
+
+library(car) # ANOVA testing
+library(lme4) # modeling
+library(lmerTest) # modeling
+library(emmeans) # calculate and plot contrasts
+library("FactoMineR") # PCA
+library(vegan) # dataset & NMDS
+library(goeveg) # NMDS screeplot
+library(EcolUtils) # Pairwise PERMANOVA
+library("factoextra")
+
+```
+
+# Importing Data
+There are primarily 2 sets of data:
+a) Survivorship Data: Fish Survival over a 96 hpf exposure period.
+b) Physiology Data: ZET endpoints - Burst Rate, Heart Rate, Length
+c) RT qPCR Data: Fold Change of 14 Primers
+
+Abbreviations:
+CM: Chiang Mai Pesticides
+SPE: CM Pesticides that has been processed with SPE
+Agri: Environmental Samples for Agriculture dominated sites
+
+```{r}
+
+# import survivorship data
+
+agri.AF.data <-
+  read_excel('D:/Zebrafish Assay_ Survivorship Collated.xlsx', sheet= 'Sample A-F')
+agri.GL.data <-
+  read_excel('D:/Zebrafish Assay_ Survivorship Collated.xlsx', sheet= 'Sample G-L')
+spe.data <-
+  read_excel('D:/Zebrafish Assay_ Survivorship Collated.xlsx', sheet= 'SPE')
+cmpesticide.data <-
+  read_excel('D:/Zebrafish Assay_ Survivorship Collated.xlsx', sheet = 'CM pesticides')
+
+cmpesticide.data$Chemical <- as.factor(cmpesticide.data$Chemical)
+cmpesticide.data$Dilution <- as.factor(cmpesticide.data$Dilution)
+cmpesticide.data$Dilution <-
+  factor(
+    cmpesticide.data$Dilution,
+    levels = c("Control", "10", "50", "250", "1250", "6250", "31250")
+  )
+cmpesticide.data$hpf <- as.factor(cmpesticide.data$hpf)
+
+
+spe.data$Chemical <- as.factor(spe.data$Chemical)
+spe.data$Dilution <- as.factor(spe.data$Dilution)
+spe.data$Dilution <-
+  factor(
+    spe.data$Dilution,
+    levels = c("Control", "10", "50", "250", "1250", "6250", "31250"))
+spe.data$hpf <- as.factor(spe.data$hpf)
+
+agri.AF.data$Site <- as.factor(agri.AF.data$Site)
+agri.AF.data$REF <- as.factor(agri.AF.data$REF)
+agri.AF.data$hpf <- as.factor(agri.AF.data$hpf)
+agri.AF.data$REF <-
+  factor(agri.AF.data$REF, levels = c("Control", "2.5", "5"))
+
+agri.GL.data$Site <- as.factor(agri.GL.data$Site)
+agri.GL.data$REF <- as.factor(agri.GL.data$REF)
+agri.GL.data$hpf <- as.factor(agri.GL.data$hpf)
+agri.GL.data$REF <-
+  factor(agri.GL.data$REF, levels = c("Control", "2.5", "5"))
+
+
+# Importing PCR data
+
+cmpesticide.pcr <-
+  read_excel('D:/PRIMER ANALYSIS.xlsx', sheet = 'CM_R')
+spepesticide.pcr <-
+  read_excel('D:/PRIMER ANALYSIS.xlsx', sheet = 'SPE_R')
+agri.pcr <- 
+  read_excel('D:/PRIMER ANALYSIS.xlsx', sheet = 'agri_R')
+
+cmpesticide.pcr <- as.data.frame(cmpesticide.pcr)
+spepesticide.pcr <- as.data.frame(spepesticide.pcr)
+agri.pcr <- as.data.frame(agri.pcr)
+
+# Import Physiological data 
+
+cmpesticide.physiology <-
+  read_excel('D:/Physiology.xlsx', sheet = 'Physiology CM')
+spe.physiology <-
+  read_excel('D:/Physiology.xlsx', sheet = 'Physiology SPE')
+agri.physiology <-
+  read_excel('D:/Physiology.xlsx', sheet = 'Physiology_A-L')
+
+
+agri.physiology$Site <- as.factor(agri.physiology$Site)
+agri.physiology$REF <- as.factor(agri.physiology$REF)
+agri.physiology$Set <- as.factor(agri.physiology$Set)
+agri.physiology$Replicate <- as.factor(agri.physiology$Replicate)
+agri.physiology.level <-
+  dplyr::select(agri.physiology, Site:Replicate)
+# agri.physiology.level$Site <- factor(agri.physiology.level$Site, levels= c("Control_A-F","Control_G-L","A","B","C","D","E","F","G","H","I","J","K","L"))
+agri.physiology.level$Site <-
+  factor(
+    agri.physiology.level$Site,
+    levels = c("Control", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L")
+  )
+
+agri.physiology <- dplyr::select(agri.physiology, Burst.Rate:Length)
+agri.physiology.all <- cbind(agri.physiology.level, agri.physiology)
+
+cmpesticide.physiology$Chemical <-
+  as.factor(cmpesticide.physiology$Chemical)
+cmpesticide.physiology$Dilution <-
+  as.factor(cmpesticide.physiology$Dilution)
+cmpesticide.physiology$Replicate <-
+  as.factor(cmpesticide.physiology$Replicate)
+cmpesticide.physiology.level <-
+  dplyr::select(cmpesticide.physiology, Chemical:Replicate)
+cmpesticide.physiology.level$Dilution <-
+  factor(
+    cmpesticide.physiology.level$Dilution,
+    levels = c("50","250", "1250", "6250", "31250", "Control")
+  )
+cmpesticide.physiology.level$Chemical <-
+  factor(
+    cmpesticide.physiology.level$Chemical,
+    levels = c(
+      "Control",
+      "Avermectin",
+      "Chaindrite",
+      "Glufosinate-Ammonium",
+      "Hexaconazole"
+    )
+  )
+
+cmpesticide.physiology <-
+  dplyr::select(cmpesticide.physiology, Burst.Rate:Length)
+cmpesticide.physiology.all <-
+  cbind(cmpesticide.physiology.level, cmpesticide.physiology)
+
+spe.physiology$Chemical <- as.factor(spe.physiology$Chemical)
+spe.physiology$Dilution <- as.factor(spe.physiology$Dilution)
+spe.physiology$Replicate <- as.factor(spe.physiology$Replicate)
+spe.physiology.level <-
+  dplyr::select(spe.physiology, Chemical:Replicate)
+spe.physiology.level$Dilution <-
+  factor(
+    spe.physiology.level$Dilution,
+    levels = c("50", "250", "1250", "6250", "31250", "Control")
+  )
+spe.physiology.level$Chemical <-
+  factor(
+    spe.physiology.level$Chemical,
+    levels = c(
+      "Control",
+      "Avermectin",
+      "Chaindrite",
+      "Glufosinate-Ammonium",
+      "Hexaconazole"
+    )
+  )
+
+spe.physiology <- dplyr::select(spe.physiology, Burst.Rate:Length)
+spe.physiology.all <- cbind(spe.physiology.level, spe.physiology)
+```
+
+# Functions 
+```{r}
+
+# For descriptive statisitics
+data_summary <- function(data, varname, groupnames){
+  require(plyr)
+  summary_func <- function(x, col){
+    c(mean = mean(x[[col]], na.rm=TRUE),
+      sd = sd(x[[col]], na.rm=TRUE))
+  }
+  data_sum<-ddply(data, groupnames, .fun=summary_func,
+                  varname)
+  data_sum <- rename(data_sum, c("mean" = varname))
+ return(data_sum)
+}
+```
+
+# Data Wrangling
+```{r}
+
+# agriculture A-F survivorship
+agri.AF.survival <- data_summary(agri.AF.data, varname='SurvivalR', 
+                    groupnames=c('Site','hpf','REF'))
+agri.AF.control <- subset(agri.AF.survival, Site == "Control")
+agri.AF.control <- agri.AF.control[,-1]
+
+# agriculture G-L survivorship
+agri.GL.survival <- data_summary(agri.GL.data, varname='SurvivalR', 
+                    groupnames=c('Site','hpf','REF'))
+agri.GL.control <- subset(agri.GL.survival, Site == "Control")
+agri.GL.control <- agri.GL.control[,-1]
+
+# SPE survivorship
+spe.survival <- data_summary(spe.data, varname='SurvivalR', 
+                    groupnames=c('Chemical','hpf','Dilution'))
+spe.control <- subset(spe.survival, Chemical == "Control")
+spe.control <- spe.control[,-1]
+
+# SPE survivorship
+cmpesticide.survival <- data_summary(cmpesticide.data, varname='SurvivalR', 
+                    groupnames=c('Chemical','hpf','Dilution'))
+cmpesticide.control <- subset(cmpesticide.survival, Chemical == "Control")
+cmpesticide.control <- cmpesticide.control[,-1]
+
+# CM pesticide PCR
+ cmpesticide.pcr.long <- cmpesticide.pcr  %>% 
+    tidyr::pivot_longer(esr1:nqo1, 
+                        names_to="primer", 
+                        values_to="fold.change" )
+ cmpesticide.pcr.summary <- data_summary(cmpesticide.pcr.long, varname='fold.change', 
+                    groupnames=c('Chemical','Dilution','primer'))
+ cmpesticide.pheatmap <- cmpesticide.pcr.long  %>% 
+    dplyr::group_by(Chemical,Dilution,primer) %>% 
+    dplyr::summarise(mean = mean(fold.change, na.rm=TRUE))
+ cmpesticide.pheatmap <- cmpesticide.pheatmap  %>% 
+    tidyr::pivot_wider(names_from = "primer", 
+                       values_from="mean")
+ cmpesticide.pheatmap <- cmpesticide.pheatmap %>% unite("Name", Chemical:Dilution)
+ cmpesticide.pheatmap <- as.data.frame(cmpesticide.pheatmap)
+ rownames(cmpesticide.pheatmap) <- cmpesticide.pheatmap$Name
+ cmpesticide.pheatmap<- cmpesticide.pheatmap[,-1]
+ ## annotations
+ cm_sample_row <- data.frame(Chemical = rep(c("Avermectin", "Chaindrite", "Control","Glu-A","Hexaconazole"), c(2,3,1,2,3)))
+ row.names(cm_sample_row) <- row.names(cmpesticide.pheatmap)
+ 
+ # SPE PCR
+  spepesticide.pcr.long <- spepesticide.pcr  %>% 
+    tidyr::pivot_longer(esr1:sult2st3, 
+                        names_to="primer", 
+                        values_to="fold.change" )
+ spepesticide.pcr.summary <- data_summary(spepesticide.pcr.long, varname='fold.change', 
+                    groupnames=c('Chemical','Dilution','primer'))
+ spepesticide.pheatmap <- spepesticide.pcr.long  %>% 
+    dplyr::group_by(Chemical,Dilution,primer) %>% 
+    dplyr::summarise(mean = mean(fold.change, na.rm=TRUE))
+ spepesticide.pheatmap <- spepesticide.pheatmap  %>% 
+    tidyr::pivot_wider(names_from = "primer", 
+                       values_from="mean")
+ spepesticide.pheatmap <- spepesticide.pheatmap %>% unite("Name", Chemical:Dilution)
+ spepesticide.pheatmap <- as.data.frame(spepesticide.pheatmap)
+ rownames(spepesticide.pheatmap) <- spepesticide.pheatmap$Name
+ spepesticide.pheatmap<- spepesticide.pheatmap[,-1]
+ ## annotations
+ spe_sample_row <- data.frame(Chemical = rep(c("Avermectin", "Chaindrite", "Control","Glu-A","Hexaconazole"), c(2,3,1,3,3)))
+ row.names(spe_sample_row) <- row.names(spepesticide.pheatmap)
+ 
+ # Environmental PCR
+ 
+ agri.pcr.long <- agri.pcr  %>% 
+    tidyr::pivot_longer(esr1:sod1, 
+                        names_to="primer", 
+                        values_to="fold.change" )
+ agri.pcr.summary <- data_summary(agri.pcr.long, varname='fold.change', 
+                    groupnames=c('Site','REF','primer'))
+ agri.pheatmap <- agri.pcr.long  %>% 
+    dplyr::group_by(Site,REF,primer) %>% 
+    dplyr::summarise(mean = mean(fold.change, na.rm=TRUE))
+ agri.pheatmap <- agri.pheatmap  %>% 
+    tidyr::pivot_wider(names_from = "primer", 
+                       values_from="mean")
+ agri.pheatmap <- agri.pheatmap %>% unite("Name", Site:REF)
+ agri.pheatmap <- as.data.frame(agri.pheatmap)
+ rownames(agri.pheatmap) <- agri.pheatmap$Name
+ agri.pheatmap<- agri.pheatmap[,-1]
+
+# specify factors for PCR
+agri.pcr.long$Site <- as.factor(agri.pcr.long$Site)
+agri.pcr.long$REF <- as.factor(agri.pcr.long$REF)
+agri.pcr.long$Set <- as.factor(agri.pcr.long$Set)
+agri.pcr.long$primer <- as.factor(agri.pcr.long$primer)
+agri.pcr.long$Site <- factor(agri.pcr.long$Site, levels= c("Control","A","B","C","D","E","F","G","H","I","J","K","L"))
+
+
+cmpesticide.pcr.long$Chemical <- as.factor(cmpesticide.pcr.long$Chemical)
+cmpesticide.pcr.long$Dilution <- as.factor(cmpesticide.pcr.long$Dilution)
+cmpesticide.pcr.long$primer <- as.factor(cmpesticide.pcr.long$primer)
+cmpesticide.pcr.long$Chemical <- factor(cmpesticide.pcr.long$Chemical, levels= c("Control","Avermectin","Chaindrite","Glufosinate-Ammonium","Hexaconazole"))
+cmpesticide.pcr.long$Dilution <- factor(cmpesticide.pcr.long$Dilution, levels=c("50","250","1250","6250","31250","Control"))
+
+spepesticide.pcr.long$Chemical <- as.factor(spepesticide.pcr.long$Chemical)
+spepesticide.pcr.long$Dilution <- as.factor(spepesticide.pcr.long$Dilution)
+spepesticide.pcr.long$primer <- as.factor(spepesticide.pcr.long$primer)
+spepesticide.pcr.long$Chemical <- factor(spepesticide.pcr.long$Chemical, levels= c("Control","Avermectin","Chaindrite","Glufosinate-Ammonium","Hexaconazole"))
+spepesticide.pcr.long$Dilution <- factor(spepesticide.pcr.long$Dilution, levels=c("50","250","1250","6250","31250","Control"))
+```
+
+# Plot survivorship curve
+```{r}
+
+# Environmental Sample
+## First Set
+fig.agri.AF.survival <- ggplot(agri.AF.survival, aes(x = hpf, y = SurvivalR, group = REF, colour = REF)) +
+  geom_line(size = 1) +
+   geom_point()+
+  geom_errorbar(aes(ymin=SurvivalR-sd, ymax=SurvivalR+sd), width=.2, size = 1,
+                position=position_dodge(0.05)) +
+  facet_wrap( ~ forcats::fct_relevel(Site,"A","B","C","D","E","F")) +
+geom_line(data=agri.AF.control,aes(x = hpf, y = SurvivalR), size=1)+
+  geom_errorbar(data=agri.AF.control,aes(ymin=SurvivalR-sd, ymax=SurvivalR+sd), width=.2, size = 1,
+                position=position_dodge(0.05)) +
+  scale_color_tableau(palette = "Tableau 10") +
+  labs (title = "ZET Survival Curve after Environmental Sample Exposure",
+        subtitle = "Set 1",
+        x = "hpf",
+        y = "Survival Rate (%)") +
+   theme_minimal() +
+       theme(plot.title = element_text(hjust = 0.5,
+                                       family = "Arial Narrow"),
+             axis.title = element_text(family = "Arial Narrow"),
+             axis.text = element_text(family = "Arial Narrow"),
+             legend.position = "bottom",
+             text = element_text(size = 14))
+
+fig.agri.AF.survival
+
+## Second Set
+fig.agri.GL.survival <- ggplot(agri.GL.survival, aes(x = hpf, y = SurvivalR, group = REF, colour = REF)) +
+  geom_line(size = 1) +
+   geom_point()+
+  geom_errorbar(aes(ymin=SurvivalR-sd, ymax=SurvivalR+sd), width=.2,size = 1,
+                position=position_dodge(0.05)) +
+  facet_wrap( ~ forcats::fct_relevel(Site,"G","H","I","J","K","L")) +
+geom_line(data=agri.GL.control,aes(x = hpf, y = SurvivalR),size = 1)+
+  geom_errorbar(data=agri.GL.control,aes(ymin=SurvivalR-sd, ymax=SurvivalR+sd), width=.2,size = 1,
+                position=position_dodge(0.05)) +
+  scale_color_tableau(palette = "Tableau 10") +
+  labs (title = "ZET Survival Curve after Environmental Sample Exposure",
+        subtitle = "Set 2",
+        x = "hpf",
+        y = "Survival Rate (%)") +
+ theme_minimal() +
+       theme(plot.title = element_text(hjust = 0.5,
+                                       family = "Arial Narrow"),
+             axis.title = element_text(family = "Arial Narrow"),
+             axis.text = element_text(family = "Arial Narrow"),
+             legend.position = "bottom",
+             text = element_text(size = 14))
+
+fig.agri.GL.survival
+
+## Combining the 2 sets in one image
+ggarrange(fig.agri.AF.survival, fig.agri.GL.survival + rremove("x.text"), 
+          labels = c("a", "b"),
+          ncol = 1, nrow = 2) %>%
+  ggexport(filename = "agri survive.png")
+
+# SPE
+
+fig.SPE.survival <- ggplot(spe.survival, aes(x = hpf, y = SurvivalR, group = Dilution, colour = Dilution)) +
+  geom_line(size = 1) +
+   geom_point()+
+  geom_errorbar(aes(ymin=SurvivalR-sd, ymax=SurvivalR+sd), width=.2,size = 1,
+                position=position_dodge(0.05)) +
+  facet_wrap( ~ Chemical) +
+  scale_color_tableau(palette = "Tableau 10") + 
+geom_line(data=spe.control,aes(x = hpf, y = SurvivalR), size = 1)+
+  geom_errorbar(data=spe.control,aes(ymin=SurvivalR-sd, ymax=SurvivalR+sd), width=.2,size = 1,
+                position=position_dodge(0.05)) +
+  labs (title = "ZET Survival Curve after Pesticide Exposure",
+        subtitle = "SPE Treated",
+        x = "hpf",
+        y = "Survival Rate (%)") +
+   theme_minimal() +
+       theme(plot.title = element_text(hjust = 0.5,
+                                       family = "Arial Narrow"),
+             axis.title = element_text(family = "Arial Narrow"),
+             axis.text = element_text(family = "Arial Narrow"),
+             legend.position = "bottom",
+             text = element_text(size = 14))
+
+fig.SPE.survival
+
+# CM pesticides
+
+fig.CM.survival <- ggplot(cmpesticide.survival, aes(x = hpf, y = SurvivalR, group = Dilution, colour = Dilution)) +
+  geom_line(size = 1) +
+   geom_point()+
+  geom_errorbar(aes(ymin=SurvivalR-sd, ymax=SurvivalR+sd), width=.2,size = 1,
+                position=position_dodge(0.05)) +
+  facet_wrap( ~ Chemical) +
+  scale_color_tableau(palette = "Tableau 10") +
+geom_line(data=cmpesticide.control,aes(x = hpf, y = SurvivalR),size = 1)+
+  geom_errorbar(data=cmpesticide.control,aes(ymin=SurvivalR-sd, ymax=SurvivalR+sd), width=.2,size = 1,
+                position=position_dodge(0.05)) +
+  
+  labs (title = "ZET Survival Curve after Pesticide Exposure",
+        subtitle = "",
+        x = "hpf",
+        y = "Survival Rate (%)") +
+  theme_minimal() +
+       theme(plot.title = element_text(hjust = 0.5,
+                                       family = "Arial Narrow"),
+             axis.title = element_text(family = "Arial Narrow"),
+             axis.text = element_text(family = "Arial Narrow"),
+             legend.position = "bottom",
+             text = element_text(size = 14))
+
+fig.CM.survival
+
+```
+
+# Analysis of Physiological Parameters
+
+## Physiology for CM Pesticides
+```{r}
+# Heart Rate
+cmpesticide.HR.m1 <- lm(Heart.Rate ~ Chemical * Dilution, data = cmpesticide.physiology.all)
+anova(cmpesticide.HR.m1)
+# all predictors are significant. Interaction is significant
+
+emm.cmpesticide.HR <- emmeans(lm(Heart.Rate ~ Chemical/Dilution, data = cmpesticide.physiology.all) , ~ Chemical/ Dilution)
+emm.cmpesticide.HR <- as.data.frame(emm.cmpesticide.HR)
+
+cm.HR<- ggplot(emm.cmpesticide.HR) +
+  geom_point(aes(x = Chemical,
+                   y = Heart.Rate,
+                   colour = Dilution),
+               position = position_jitterdodge(dodge.width = 0.5), 
+               size = 2, alpha=0.5, data = subset(cmpesticide.physiology.all,!is.na(Heart.Rate))) +
+    geom_point(aes(x = Chemical,
+                   y = emmean,
+                   colour = Dilution),
+               position = position_dodge(width = 0.5),
+               size = 3) +
+    geom_errorbar(aes(x = Chemical,
+                      ymin = lower.CL, 
+                      ymax = upper.CL,
+                      color = Dilution),
+                  width = 0.2, size = 1,
+                  position = position_dodge(width=0.5)) +
+    labs (title = "",
+        subtitle = "Heart Rate",
+        x = "Chemical",
+        y = "Mean Heart Rate (bps)") +
+  theme_minimal() +
+       theme(plot.title = element_text(hjust = 0.5,
+                                       family = "Arial Narrow"),
+             axis.title = element_text(family = "Arial Narrow"),
+             axis.text = element_text(family = "Arial Narrow"),
+             legend.position = "bottom",
+             text = element_text(size = 20))
+
+pairs(emmeans(lm(Heart.Rate ~ Chemical/Dilution, data = cmpesticide.physiology.all), ~ Chemical/Dilution, adjust = "tukey",
+      alpha = 0.05))
+
+```
+```{r}
+# Burst Rate
+cmpesticide.BR.m1 <- lm(Burst.Rate ~ Chemical * Dilution, data = cmpesticide.physiology.all)
+anova(cmpesticide.BR.m1)
+
+# all variables are significant, interaction is significant
+
+emm.cmpesticide.BR <- emmeans(lm(Burst.Rate ~ Chemical/Dilution, data = cmpesticide.physiology.all) , ~ Chemical / Dilution)
+emm.cmpesticide.BR <- as.data.frame(emm.cmpesticide.BR)
+
+cm.BR<- ggplot(emm.cmpesticide.BR) +
+  geom_point(aes(x = Chemical,
+                   y = Burst.Rate,
+                   colour = Dilution),
+               position = position_jitterdodge(dodge.width = 0.5), 
+               size = 2, alpha=0.5, data = subset(cmpesticide.physiology.all,!is.na(Burst.Rate))) +
+    geom_point(aes(x = Chemical,
+                   y = emmean,
+                   colour = Dilution),
+               position = position_dodge(width = 0.5),
+               size = 3) +
+    geom_errorbar(aes(x = Chemical,
+                      ymin = lower.CL, 
+                      ymax = upper.CL,
+                      color = Dilution),
+                  width = 0.2, size = 1,
+                  position = position_dodge(width=0.5)) +
+    labs (title = "",
+        subtitle = "Burst Rate",
+        x = "Chemical",
+        y = "Mean Burst Rate (%)") +
+  theme_minimal() +
+       theme(plot.title = element_text(hjust = 0.5,
+                                       family = "Arial Narrow"),
+             axis.title = element_text(family = "Arial Narrow"),
+             axis.text = element_text(family = "Arial Narrow"),
+             legend.position = "bottom",
+             text = element_text(size = 20))
+
+pairs(emmeans(lm(Burst.Rate ~ Chemical/Dilution, data = cmpesticide.physiology.all), ~ Chemical/Dilution, adjust = "tukey",
+      alpha = 0.05))
+
+```
+```{r}
+# Length
+cmpesticide.length.m1 <- lm(Length ~ Chemical/Dilution, data = cmpesticide.physiology.all)
+anova(cmpesticide.length.m1)
+# only Chemical is significant, but I kept the interaction because the p-value is close to significant , p = 0.07
+emm.cmpesticide.length <- emmeans(lm(Length ~ Chemical/Dilution, data = cmpesticide.physiology.all) , ~ Chemical / Dilution)
+emm.cmpesticide.length <- as.data.frame(emm.cmpesticide.length)
+
+cm.length<- ggplot(emm.cmpesticide.length) +
+  geom_point(aes(x = Chemical,
+                   y = Length,
+                   colour = Dilution),
+               position = position_jitterdodge(dodge.width = 0.5), 
+               size = 2, alpha=0.5, data = subset(cmpesticide.physiology.all,!is.na(Length)))+
+    geom_point(aes(x = Chemical,
+                   y = emmean,
+                   colour = Dilution),
+               position = position_dodge(width = 0.5),
+               size = 3) +
+    geom_errorbar(aes(x = Chemical,
+                      ymin = lower.CL, 
+                      ymax = upper.CL,
+                      color = Dilution),
+                  width = 0.2, size = 1,
+                  position = position_dodge(width=0.5)) +
+      labs (title = "",
+        subtitle = "Length",
+        x = "Chemical",
+        y = "Mean Length (um)") +
+  theme_minimal() +
+       theme(plot.title = element_text(hjust = 0.5,
+                                       family = "Arial Narrow"),
+             axis.title = element_text(family = "Arial Narrow"),
+             axis.text = element_text(family = "Arial Narrow"),
+             legend.position = "bottom",
+             text = element_text(size = 20))
+
+pairwise <- pairs(emmeans(lm(Length ~ Chemical+Dilution, data = cmpesticide.physiology.all), ~ Chemical / Dilution, adjust = "tukey",
+      alpha = 0.05))
+ pairwise <- as.data.frame(pairwise)
+  sig_pairs <- pairwise[pairwise$'p.value' < 0.05, ]
+  sig_pairs <- sig_pairs[sig_pairs$contrast %like% "Control",]
+  if (nrow(sig_pairs) > 0) {
+    for (j in 1:nrow(sig_pairs)) {
+      #cat("\nContrasts for", sig_pairs$contrast[j], ":\n")
+      print(sig_pairs[j, ])
+    }
+  } 
+
+cmcombine <- ggarrange(cm.BR, cm.HR,cm.length , 
+          labels = c("a", "b","c"), common.legend = TRUE,legend = "bottom",
+          ncol = 2, nrow = 2) 
+
+cmcombine <- annotate_figure(cmcombine, top = text_grob("Physiological Effect by Pesticide Exposure", face = "bold", size = 20, family = "Arial Narrow"))
+
+cmcombine
+# %>%
+  # ggexport(filename = "agri survive.png")
+```
+
+## SPE physiology
+```{r}
+# Heart Rate
+spe.HR.m1 <- lm(Heart.Rate ~ Chemical * Dilution, data = spe.physiology.all)
+anova(spe.HR.m1)
+# all predictors are significant
+emm.spe.HR <- emmeans(lm(Heart.Rate ~ Chemical/Dilution, data = spe.physiology.all) , ~ Chemical/ Dilution)
+emm.spe.HR <- as.data.frame(emm.spe.HR)
+
+spe.HR <- ggplot(emm.spe.HR) +
+   geom_point(aes(x = Chemical,
+                   y = Heart.Rate,
+                   colour = Dilution),
+               position = position_jitterdodge(dodge.width = 0.5), 
+               size = 2, alpha=0.5, data = subset(spe.physiology.all,!is.na(Heart.Rate)))+
+    geom_point(aes(x = Chemical,
+                   y = emmean,
+                   colour = Dilution),
+               position = position_dodge(width = 0.5),
+               size = 3) +
+    geom_errorbar(aes(x = Chemical,
+                      ymin = lower.CL, 
+                      ymax = upper.CL,
+                      color = Dilution),
+                  width = 0.2, size = 1,
+                  position = position_dodge(width=0.5)) +
+    labs (title = "",
+        subtitle = "Heart Rate",
+        x = "Chemical",
+        y = "Mean Heart Rate (bps)") +
+  theme_minimal() +
+       theme(plot.title = element_text(hjust = 0.5,
+                                       family = "Arial Narrow"),
+             axis.title = element_text(family = "Arial Narrow"),
+             axis.text = element_text(family = "Arial Narrow"),
+             legend.position = "bottom",
+             text = element_text(size = 20))
+
+pairs(emmeans(lm(Heart.Rate ~ Chemical/Dilution, data = spe.physiology.all), ~ Chemical/Dilution, adjust = "tukey",
+      alpha = 0.05))
+
+# Burst Rate
+spe.BR.m1 <- lm(Burst.Rate ~ Chemical * Dilution, data = spe.physiology.all)
+anova(spe.BR.m1)
+# all predictors are significant
+emm.spe.BR <- emmeans(lm(Burst.Rate ~ Chemical/Dilution, data = spe.physiology.all) , ~ Chemical/ Dilution)
+emm.spe.BR <- as.data.frame(emm.spe.BR)
+
+spe.BR<- ggplot(emm.spe.BR) +
+  geom_point(aes(x = Chemical,
+                   y = Burst.Rate,
+                   colour = Dilution),
+               position = position_jitterdodge(dodge.width = 0.5), 
+               size = 2, alpha=0.5, data = subset(spe.physiology.all,!is.na(Burst.Rate))) +
+    geom_point(aes(x = Chemical,
+                   y = emmean,
+                   colour = Dilution),
+               position = position_dodge(width = 0.5),
+               size = 3) +
+    geom_errorbar(aes(x = Chemical,
+                      ymin = lower.CL, 
+                      ymax = upper.CL,
+                      color = Dilution),
+                  width = 0.2, size = 1,
+                  position = position_dodge(width=0.5)) +
+   labs (title = "",
+        subtitle = "Burst Rate",
+        x = "Chemical",
+        y = "Mean Burst Rate (%)") +
+  theme_minimal() +
+       theme(plot.title = element_text(hjust = 0.5,
+                                       family = "Arial Narrow"),
+             axis.title = element_text(family = "Arial Narrow"),
+             axis.text = element_text(family = "Arial Narrow"),
+             legend.position = "bottom",
+             text = element_text(size = 20))
+
+pairs(emmeans(lm(Burst.Rate ~ Chemical/Dilution, data = spe.physiology.all), ~ Chemical/Dilution, adjust = "tukey",
+      p.adjust.method = "BH",
+      alpha = 0.05))
+
+# Length
+spe.length.m1 <- lm(Length ~ Chemical * Dilution, data = spe.physiology.all)
+anova(spe.length.m1)
+# all predictors are significant
+emm.spe.length <- emmeans(lm(Length ~ Chemical/Dilution, data = spe.physiology.all) , ~ Chemical/ Dilution)
+emm.spe.length <- as.data.frame(emm.spe.length)
+
+spe.length <- ggplot(emm.spe.length) +
+  geom_point(aes(x = Chemical,
+                   y = Length,
+                   colour = Dilution),
+               position = position_jitterdodge(dodge.width = 0.5), 
+               size = 2, alpha=0.5, data = subset(spe.physiology.all,!is.na(Length)))+
+    geom_point(aes(x = Chemical,
+                   y = emmean,
+                   colour = Dilution),
+               position = position_dodge(width = 0.5),
+               size = 3) +
+    geom_errorbar(aes(x = Chemical,
+                      ymin = lower.CL, 
+                      ymax = upper.CL,
+                      color = Dilution),
+                  width = 0.2, size = 1,
+                  position = position_dodge(width=0.5)) +
+    labs (title = "",
+        subtitle = "Length",
+        x = "Chemical",
+        y = "Mean Length (um)") +
+  theme_minimal() +
+       theme(plot.title = element_text(hjust = 0.5,
+                                       family = "Arial Narrow"),
+             axis.title = element_text(family = "Arial Narrow"),
+             axis.text = element_text(family = "Arial Narrow"),
+             legend.position = "bottom",
+             text = element_text(size = 20))
+
+pairs(emmeans(lm(Length ~ Chemical/Dilution, data = spe.physiology.all), ~ Chemical/Dilution, adjust = "tukey",
+      p.adjust.method = "BH",
+      alpha = 0.5))
+
+specombine <- ggarrange(spe.BR, spe.HR,spe.length , 
+          labels = c("a", "b","c"), common.legend = TRUE,legend = "bottom",
+          ncol = 2, nrow = 2) 
+annotate_figure(specombine, top = text_grob("Physiological Effect by Pesticide Exposure after SPE", face = "bold", size = 20, family = "Arial Narrow"))
+
+specombine
+
+```
+
+## Physiology for Environmental samples
+```{r}
+agri.length.m1 <- lmer(Length ~ Site * REF + (1|Set), data = agri.physiology.all)
+anova(agri.length.m1)
+# Only site is a significant variable
+
+emm.agri.length <- emmeans(lmer(Length ~ Site / REF + (1|Set), data = agri.physiology.all) , ~ Site * REF,lmer.df = "asymptotic")
+emm.agri.length <- as.data.frame(emm.agri.length)
+
+agri.length <- ggplot(emm.agri.length) +
+   geom_point(aes(x = Site,
+                   y = Length,
+                   colour = REF),
+               position = position_jitterdodge(dodge.width = 0.5), 
+               size = 2, alpha=0.5, data = subset(agri.physiology.all,!is.na(Length))) +
+    geom_point(aes(x = Site,
+                   y = emmean,
+                   colour = REF),
+               position = position_dodge(width = 0.5),
+               size = 3) +
+    geom_errorbar(aes(x = Site,
+                      ymin = asymp.LCL, 
+                      ymax = asymp.UCL,
+                      color = REF),
+                  width = 0.2, size = 1,
+                  position = position_dodge(width=0.5)) +
+    labs (title = "",
+        subtitle = "Length",
+        x = "Site",
+        y = "Mean Length (um)") +
+  theme_minimal() +
+       theme(plot.title = element_text(hjust = 0.5,
+                                       family = "Arial Narrow"),
+             axis.title = element_text(family = "Arial Narrow"),
+             axis.text = element_text(family = "Arial Narrow"),
+             legend.position = "bottom",
+             text = element_text(size = 20))
+
+pairs(emmeans(lmer(Length ~ Site  + (1|Set), data = agri.physiology.all) , ~ Site), adjust = "tukey",
+      alpha = 0.05)
+# no significant differences compared to mean, although between sites there are sig differences
+
+
+# Heart rate
+agri.HR.m1 <- lmer(Heart.Rate ~ Site*REF  + (1|Set), data = agri.physiology.all)
+anova(agri.HR.m1)
+
+# only REF is significant, but that does not make sense in the context of the research, so we kept site as a fixed effect
+
+
+emm.agri.HR <- emmeans(lmer(Heart.Rate ~ Site/REF  + (1|Set), data = agri.physiology.all) , ~ Site * REF, lmer.df="asymptotic")
+emm.agri.HR <- as.data.frame(emm.agri.HR)
+
+agri.HR<- ggplot(emm.agri.HR) +
+   geom_point(aes(x = Site,
+                   y = Heart.Rate,
+                   colour = REF),
+               position = position_jitterdodge(dodge.width = 0.5), 
+               size = 2, alpha=0.5, data = subset(agri.physiology.all,!is.na(Heart.Rate))) +
+    geom_point(aes(x = Site,
+                   y = emmean,
+                   colour = REF),
+               position = position_dodge(width = 0.5),
+               size = 3) +
+    geom_errorbar(aes(x = Site,
+                      ymin = asymp.LCL, 
+                      ymax = asymp.UCL,
+                      color = REF),
+                  width = 0.2, size = 1,
+                  position = position_dodge(width=0.5)) +
+   labs (title = "",
+        subtitle = "Heart Rate",
+        x = "Site",
+        y = "Heart Rate (bps)") +
+  theme_minimal() +
+       theme(plot.title = element_text(hjust = 0.5,
+                                       family = "Arial Narrow"),
+             axis.title = element_text(family = "Arial Narrow"),
+             axis.text = element_text(family = "Arial Narrow"),
+             legend.position = "bottom",
+             text = element_text(size = 20))
+
+pairs(emmeans(lmer(Length ~ Site/REF  + (1|Set), data = agri.physiology.all) , ~ Site* REF), adjust = "tukey",
+      alpha = 0.05)
+
+# burst rate
+
+agri.BR.m1 <- lmer(Burst.Rate ~ Site*REF  + (1|Set), data = agri.physiology.all)
+anova(agri.BR.m1)
+
+# singular fit warning, random variable can be ignored
+# only site is a significant predictor, we will plot emmeans by lm
+
+agri.BR.m2 <- lm(Burst.Rate ~ Site*REF, data = agri.physiology.all)
+anova(agri.BR.m2)
+
+# site remains the only significant variable
+
+emm.agri.BR <- emmeans(lm(Burst.Rate ~ Site/REF  , data = agri.physiology.all) , ~ Site*REF)
+emm.agri.BR <- as.data.frame(emm.agri.BR)
+
+agri.BR<- ggplot(emm.agri.BR) +
+  geom_point(aes(x = Site,
+                   y = Burst.Rate,
+                   colour = REF),
+               position = position_jitterdodge(dodge.width = 0.5), 
+               size = 2, alpha=0.5, data = subset(agri.physiology.all,!is.na(Burst.Rate))) +
+    geom_point(aes(x = Site,
+                   y = emmean,
+                   colour = REF),
+               position = position_dodge(width = 0.5),
+               size = 3) +
+    geom_errorbar(aes(x = Site,
+                      ymin = lower.CL, 
+                      ymax = upper.CL,
+                      color = REF),
+                  width = 0.2, size = 1,
+                  position = position_dodge(width=0.5)) +
+     labs (title = "Physiological Effect by Environmental Water Exposure",
+        subtitle = "Burst Rate",
+        x = "Site",
+        y = "Burst Rate (%)") +
+  theme_minimal() +
+       theme(plot.title = element_text(hjust = 0.5,
+                                       family = "Arial Narrow"),
+             axis.title = element_text(family = "Arial Narrow"),
+             axis.text = element_text(family = "Arial Narrow"),
+             legend.position = "bottom",
+             text = element_text(size = 20))
+
+pairs(emmeans(lm(Burst.Rate ~ Site/REF, data = agri.physiology.all) , ~ Site/REF), adjust = "tukey",
+      alpha = 0.05)
+
+ggarrange(agri.BR, agri.HR,agri.length , 
+          labels = c("a", "b","c"), common.legend = TRUE,legend = "bottom",
+          ncol = 1, nrow = 3)
+
+# no significant difference against control after tukey adjustment
+```
+
+
+## Plot Environmental Samples, Physiology PCA
+Creating a PCA to visualise the data
+```{r}
+
+res.pca <-
+  PCA(
+    agri.physiology,
+    scale.unit = TRUE,
+    ncp = 3,
+    graph = TRUE
+  )
+# extract pc scores for first two component and add to dat dataframe
+agri.physiology$pc1 <-
+  res.pca$ind$coord[, 1] # indexing the first column
+
+agri.physiology$pc2 <-
+  res.pca$ind$coord[, 2]  # indexing the second column
+
+pca.vars <- res.pca$var$coord
+pca.vars <- as.data.table(pca.vars)
+pca.vars$vars <- rownames(pca.vars)
+
+pca.vars.m <- melt(pca.vars, id.vars = "vars")
+plot(res.pca)
+#plotting with ggplot PCA
+
+agri.pca <-
+  ggplot(
+    data = agri.physiology ,
+    aes(
+      x = pc1,
+      y = pc2,
+      color = agri.physiology.all$Site,
+      shape = agri.physiology.all$REF)) +
+  
+  geom_hline(yintercept = 0, lty = 2) +
+  geom_vline(xintercept = 0, lty = 2) +
+  guides(color = guide_legend(title = "Site"),
+         shape = guide_legend(title = "REF")) +
+  geom_point(alpha = 1, size = 5) +
+  
+  stat_ellipse(
+    geom = "polygon",
+    aes(color = agri.physiology.level$Site),
+    alpha = 0,
+    show.legend = FALSE,
+    level = 0.95,
+    type = "t" ) +
+  scale_color_tableau(palette = "Tableau 20",direction = -1)+
+  #geom_mark_ellipse(aes(fill=agri.physiology.level$Site,
+  # color=agri.physiology.level$Site),alpha=0,
+  # show.legend = FALSE)
+  labs (title = "Summary of Physiological Traits after Enviromental Water Exposure ",
+        subtitle = "Principle Coordinate Analysis",
+        x = "PC 1 (50.37%)",
+        y = "PC 2 (37.65%)") +
+  theme_minimal() +
+       theme(plot.title = element_text(hjust = 0.5,
+                                       family = "Arial Narrow"),
+             axis.title = element_text(family = "Arial Narrow"),
+             axis.text = element_text(family = "Arial Narrow"),
+             legend.position = "right",
+             text = element_text(size = 14))
+
+
+  #scale_fill_tab(option = "turbo", discrete = TRUE, direction = -1)+ scale_color_viridis(option = "turbo", discrete = TRUE, direction = -1)
+
+# PLOTTING LOADING VALUES
+circleFun <- function(center = c(0, 0),
+                      diameter = 1,
+                      npoints = 100) {
+  r = diameter / 2
+  tt <- seq(0, 2 * pi, length.out = npoints)
+  xx <- center[1] + r * cos(tt)
+  yy <- center[2] + r * sin(tt)
+  return(data.frame(x = xx, y = yy))
+}
+
+circ <- circleFun(c(0, 0), 2, npoints = 500)
+
+vars.p <-  ggplot() +
+  
+  geom_path(
+    data = circ,
+    aes(x, y),
+    lty = 2,
+    color = "grey",
+    alpha = 0.7) +
+  
+   geom_hline(
+    yintercept = 0,
+    lty = 2,
+    color = "grey",
+    alpha = 0.9) +
+  
+  geom_vline(
+    xintercept = 0,
+    lty = 2,
+    color = "grey",
+    alpha = 0.9) +
+  
+  geom_segment(
+    data = pca.vars,
+    aes(
+      x = 0, xend = Dim.1,
+      y = 0, yend = Dim.2),
+    
+    arrow = arrow(length = unit(0.025, "npc"), type = "open"),
+    
+    lwd = 1) +
+  
+  geom_text_repel(
+    data = pca.vars,
+    aes(
+      x = Dim.1 * 1.15,
+      y =  Dim.2 * 1.15,
+      label = c("Burst Rate", "Heart Rate", "Length")
+    ), linewidth = 5) +
+ labs (title = "Loading Variables ",
+        subtitle = "",
+        x = "PC 1 (50.37%)",
+        y = "PC 2 (37.65%)") +
+  theme_minimal() +
+       theme(plot.title = element_text(hjust = 0.5,
+                                       family = "Arial Narrow"),
+             axis.title = element_text(family = "Arial Narrow"),
+             axis.text = element_text(family = "Arial Narrow"),
+             legend.position = "right",
+             text = element_text(size = 12))
+
+# print figures
+ggarrange(agri.pca, vars.p + rremove("x.text"), 
+          labels = c("", ""),
+          ncol = 2, nrow = 1)
+
+# additional plots with factoextra package
+
+eig.val <- get_eigenvalue(res.pca)
+eig.val
+fviz_eig(res.pca, addlabels = TRUE, ylim = c(0, 50))
+
+fviz_pca_var(res.pca, col.var = "black")
+
+fviz_pca_ind(res.pca, #col.ind = "cos2", 
+             #gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+             repel = TRUE ,# Avoid text overlapping (slow if many points)
+             geom.ind = "point", # show points only (nbut not "text")
+             col.ind = agri.physiology.level$Site, # color by groups
+             #palette = c("#00AFBB", "#E7B800", "#FC4E07"),
+             addEllipses = TRUE, ellipse.type = "confidence", # Concentration ellipses
+             legend.title = "Site"
+             )
+
+fviz_pca_biplot(res.pca, 
+                col.ind = agri.physiology.level$Site, palette = "GSEA", 
+                addEllipses = TRUE,ellipse.type = "confidence", label = "var",
+                col.var = "black", repel = FALSE,
+                legend.title = "Site") 
+```
+
+# PCR heatmap
+Heat map of the mean log(foldchange) of each treatment
+```{r}
+
+quantile_breaks <- function(xs, n = 10) {
+  breaks <- quantile(xs, probs = seq(0, 1, length.out = n),na.rm=TRUE)
+  breaks[!duplicated(breaks)]
+}
+mat_breaks <- quantile_breaks(agri.pheatmap, n = 100)
+
+pheatmap(log(cmpesticide.pheatmap), main = "Gene expression (RQ) of Selected Pesticides",annotation_row = cm_sample_row, cutree_cols = 3,  display_numbers = TRUE)
+
+pheatmap(log(spepesticide.pheatmap), main = "Gene expression (RQ) of Selected Pesticides after SPE", annotation_row = spe_sample_row, cutree_cols = 2,  display_numbers = TRUE)
+
+pheatmap(log(agri.pheatmap), main = "Gene expression (RQ) of Environmental Site Samples",  display_numbers = TRUE)
+```
+
+
+# Modelling PCR statistics
+```{r}
+
+# agri
+agri.pcr.long <- agri.pcr.long[,-1]
+agri.pcr.m1 <- lmer(fold.change ~Site + REF + primer + Site:REF + Site:primer+ REF:primer + (1|Set)  ,data = agri.pcr.long)
+anova(agri.pcr.m1)
+# sigular fit, hence use lm
+
+agri.pcr.m2 <- lm(log(fold.change) ~ Site + REF + primer + Site:REF + Site:primer+ REF:primer, data = agri.pcr.long)
+anova(agri.pcr.m2)
+
+emm.agri.pcr <- emmeans(lm(log(fold.change) ~ Site + REF + primer + Site:REF + Site:primer, data = agri.pcr.long) , ~ Site / REF | primer)
+emm.agri.pcr.df <- as.data.frame(emm.agri.pcr)
+
+ggplot(emm.agri.pcr.df) +
+  geom_point(aes(x = Site,
+                   y = log(fold.change),
+                   colour = REF),
+               position = position_jitterdodge(dodge.width = 0.5), 
+               size = 2, alpha=0.5, data = subset(agri.pcr.long,!is.na(fold.change))) +
+    geom_point(aes(x = Site,
+                   y = emmean,
+                   colour = REF),
+               position = position_dodge(width = 0.5),
+               size = 3) +
+    geom_errorbar(aes(x = Site,
+                      ymin = lower.CL, 
+                      ymax = upper.CL,
+                      color = REF),
+                  width = 0.2, size = 1,
+                  position = position_dodge(width=0.5)) +
+   facet_wrap(~ primer) +
+    labs(title = "Gene Expression: Environmental Samples",
+      x = "Site",
+         y = "Mean log(Fold Change)")+
+       theme(plot.title = element_text(hjust = 0.5,
+                                       family = "Arial Narrow"),
+             axis.title = element_text(family = "Arial Narrow"),
+             axis.text = element_text(family = "Arial Narrow"),
+             legend.position = "right",
+             text = element_text(size = 20))
+
+pairwise <- pairs(emmeans(lm(log(fold.change) ~ Site + REF + primer + Site:REF + Site:primer , data = agri.pcr.long) , ~ Site/REF | primer), adjust = "tukey",
+      alpha = 0.05)
+ pairwise <- as.data.frame(pairwise)
+  sig_pairs <- pairwise[pairwise$'p.value' < 0.05, ]
+  sig_pairs <- sig_pairs[sig_pairs$contrast %like% "Control",]
+  if (nrow(sig_pairs) > 0) {
+    for (j in 1:nrow(sig_pairs)) {
+      #cat("\nContrasts for", sig_pairs$contrast[j], ":\n")
+      print(sig_pairs[j, ])
+    }
+    } 
+
+# cm
+cmpesticide.pcr.long <- cmpesticide.pcr.long[,-1]
+cmpesticide.pcr.m1 <- lm(log(fold.change) ~.^2  ,data = cmpesticide.pcr.long)
+anova(cmpesticide.pcr.m1)
+summary(cmpesticide.pcr.m1)
+
+emm.cmpesticide.pcr <- emmeans(lm(log(fold.change) ~ Chemical + Dilution + primer + Chemical:Dilution + Chemical:primer + Dilution:primer, data = cmpesticide.pcr.long) , ~ ~ Chemical / Dilution | primer)
+emm.cmpesticide.pcr.df <- as.data.frame(emm.cmpesticide.pcr)
+
+ggplot(emm.cmpesticide.pcr.df) +
+  geom_point(aes(x = Chemical,
+                   y = log(fold.change),
+                   colour = Dilution),
+               position = position_jitterdodge(dodge.width = 0.5), 
+               size = 2, alpha=0.5, data = subset(cmpesticide.pcr.long,!is.na(fold.change))) +
+    geom_point(aes(x = Chemical,
+                   y = emmean,
+                   colour = Dilution),
+               position = position_dodge(width = 0.5),
+               size = 3) +
+    geom_errorbar(aes(x = Chemical,
+                      ymin = lower.CL, 
+                      ymax = upper.CL,
+                      color = Dilution),
+                  width = 0.2, size = 1,
+                  position = position_dodge(width=0.5)) +
+   facet_wrap(~ primer) +
+  scale_x_discrete(guide=guide_axis(n.dodge=2))+
+labs(title = "Gene Expression: Pesticide Samples",
+      x = "Site",
+         y = "Mean log(Fold Change)")+
+       theme(plot.title = element_text(hjust = 0.5,
+                                       family = "Arial Narrow"),
+             axis.title = element_text(family = "Arial Narrow"),
+             axis.text = element_text(family = "Arial Narrow"),
+             legend.position = "right",
+             text = element_text(size = 20))
+
+
+pairwise <- pairs(emmeans(lm(log(fold.change) ~ Chemical + Dilution + primer + Chemical:Dilution + Chemical:primer + Dilution:primer, data = cmpesticide.pcr.long) , ~ Chemical/Dilution | primer), adjust = "tukey",
+      alpha = 0.05)
+ pairwise <- as.data.frame(pairwise)
+  sig_pairs <- pairwise[pairwise$'p.value' < 0.05, ]
+  sig_pairs <- sig_pairs[sig_pairs$contrast %like% "Control",]
+  if (nrow(sig_pairs) > 0) {
+    for (j in 1:nrow(sig_pairs)) {
+      #cat("\nContrasts for", sig_pairs$contrast[j], ":\n")
+      print(sig_pairs[j, ])
+    }
+  } 
+  
+  # SPE
+  
+    spepesticide.pcr.long <- spepesticide.pcr.long[,-1]
+spepesticide.pcr.m1 <- lm(log(fold.change) ~.^2  ,data = spepesticide.pcr.long)
+anova(spepesticide.pcr.m1)
+summary(spepesticide.pcr.m1)
+
+emm.spepesticide.pcr <- emmeans(lm(log(fold.change) ~ Chemical + Dilution + primer + Chemical:Dilution + Chemical:primer + Dilution:primer, data = spepesticide.pcr.long) , ~ Chemical/ Dilution | primer)
+emm.spepesticide.pcr.df <- as.data.frame(emm.spepesticide.pcr)
+
+ggplot(emm.spepesticide.pcr.df) +
+  geom_point(aes(x = Chemical,
+                   y = log(fold.change),
+                   colour = Dilution),
+               position = position_jitterdodge(dodge.width = 0.3), 
+               size = 2, alpha=0.5, data = subset(spepesticide.pcr.long,!is.na(fold.change))) +
+    geom_point(aes(x = Chemical,
+                   y = emmean,
+                   colour = Dilution),
+               position = position_dodge(width = 0.5),
+               size = 3) +
+    geom_errorbar(aes(x = Chemical,
+                      ymin = lower.CL, 
+                      ymax = upper.CL,
+                      color = Dilution),
+                  width = 0.2, size = 1,
+                  position = position_dodge(width=0.5)) +
+   facet_wrap(~ primer) +
+    scale_x_discrete(guide=guide_axis(n.dodge=2))+
+labs(title = "Gene Expression: Pesticide Samples after SPE",
+      x = "Site",
+         y = "Mean log(Fold Change)")+
+       theme(plot.title = element_text(hjust = 0.5,
+                                       family = "Arial Narrow"),
+             axis.title = element_text(family = "Arial Narrow"),
+             axis.text = element_text(family = "Arial Narrow"),
+             legend.position = "right",
+             text = element_text(size = 20))
+
+
+pairwise <- pairs(emmeans(lm(log(fold.change) ~ Chemical+Dilution + primer + Chemical:Dilution + Chemical:primer + Dilution:primer, data = spepesticide.pcr.long) , ~ Chemical/Dilution | primer), adjust = "tukey",
+      alpha = 0.05)
+ pairwise <- as.data.frame(pairwise)
+  sig_pairs <- pairwise[pairwise$'p.value' < 0.05, ]
+  sig_pairs <- sig_pairs[sig_pairs$contrast %like% "Control",]
+  if (nrow(sig_pairs) > 0) {
+    for (j in 1:nrow(sig_pairs)) {
+      #cat("\nContrasts for", sig_pairs$contrast[j], ":\n")
+      print(sig_pairs[j, ])
+    }
+  } 
+```
+
+
+
