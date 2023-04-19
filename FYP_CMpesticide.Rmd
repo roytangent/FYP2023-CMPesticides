@@ -43,11 +43,12 @@ library(car) # ANOVA testing
 library(lme4) # modeling
 library(lmerTest) # modeling
 library(emmeans) # calculate and plot contrasts
-library("FactoMineR") # PCA
+library(FactoMineR) # PCA
+library(factoextra) 
 library(vegan) # dataset & NMDS
 library(goeveg) # NMDS screeplot
 library(EcolUtils) # Pairwise PERMANOVA
-library("factoextra")
+library(remotes) # vegan wrapper 
 
 ```
 
@@ -1020,6 +1021,22 @@ fviz_pca_biplot(res.pca,
                 col.var = "black", repel = FALSE,
                 legend.title = "Site") 
 ```
+
+# PERMANOVA and PCA pairwise comparisons
+```{r}
+adonis(agri.physiology[,c(1:3)] ~ Site, data = agri.physiology.level)
+
+# Create dissimilarity matrix
+dis <- vegdist(agri.physiology[,c(1:3)])
+adonis.pair(dis,agri.physiology.level$Site)
+# Check for non-equal dispersions using betadisper() and permutest()
+dispersion_model <- betadisper(dis, agri.physiology.level$Site)
+permutest(dispersion_model, pairwise = TRUE) # include pairwise comparisons
+
+# Visualise differences in dispersions between groups
+plot(dispersion_model)
+```
+
 
 # PCR heatmap
 Heat map of the mean log(foldchange) of each treatment
